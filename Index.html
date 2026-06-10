@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Certificate Status Checker</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; background: #f0f4f8; min-height: 100vh; }
+  .site-header { background: #1F4E79; color: white; padding: 18px 24px; display: flex; align-items: center; justify-content: space-between; }
+  .header-left { display: flex; align-items: center; gap: 14px; }
+  .logo-circle { width: 48px; height: 48px; background: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #1F4E79; font-size: 16px; flex-shrink: 0; }
+  .org-info h1 { font-size: 18px; font-weight: bold; }
+  .org-info p { font-size: 12px; opacity: 0.8; margin-top: 2px; }
+  .admin-link { font-size: 20px; color: rgba(255,255,255,0.3); cursor: pointer; padding: 4px 8px; border-radius: 4px; user-select: none; }
+  .admin-link:hover { color: rgba(255,255,255,0.7); }
+  .main-container { max-width: 700px; margin: 32px auto; padding: 0 16px; }
+  .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px; }
+  .stat-box { background: white; border-radius: 8px; padding: 14px; text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
+  .stat-num { font-size: 28px; font-weight: bold; color: #1F4E79; }
+  .stat-label { font-size: 11px; color: #888; margin-top: 3px; }
+  .search-card { background: white; border-radius: 10px; padding: 28px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 24px; }
+  .search-card h2 { font-size: 17px; color: #1F4E79; margin-bottom: 6px; }
+  .search-card p { font-size: 13px; color: #666; margin-bottom: 18px; }
+  .search-row { display: flex; gap: 10px; }
+  .search-row input { flex: 1; padding: 11px 14px; border: 1.5px solid #ccc; border-radius: 7px; font-size: 14px; outline: none; transition: border 0.2s; }
+  .search-row input:focus { border-color: #1F4E79; }
+  .search-row button { padding: 11px 22px; background: #1F4E79; color: white; border: none; border-radius: 7px; font-size: 14px; cursor: pointer; font-weight: bold; white-space: nowrap; }
+  .search-row button:hover { background: #163d61; }
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 100; align-items: center; justify-content: center; }
+  .overlay.show { display: flex; }
+  .modal { background: white; border-radius: 12px; padding: 32px; width: 340px; max-width: 90vw; }
+  .modal h3 { font-size: 16px; color: #1F4E79; margin-bottom: 6px; }
+  .modal p { font-size: 13px; color: #888; margin-bottom: 18px; }
+  .modal input[type=password] { width: 100%; padding: 10px 14px; border: 1.5px solid #ccc; border-radius: 7px; font-size: 14px; outline: none; margin-bottom: 10px; }
+  .modal-btns { display: flex; gap: 10px; }
+  .modal-btns button { flex: 1; padding: 10px; border-radius: 7px; font-size: 14px; cursor: pointer; font-weight: bold; border: none; }
+  .btn-login { background: #1F4E79; color: white; }
+  .btn-cancel { background: #f0f0f0; color: #555; }
+  .error-msg { font-size: 12px; color: #9C1D2A; margin-bottom: 8px; display: none; }
+  .admin-panel { background: #1F4E79; border-radius: 10px; padding: 20px 24px; margin-bottom: 24px; display: none; }
+  .admin-panel.show { display: block; }
+  .ap-title { color: white; font-size: 14px; font-weight: bold; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
+  .ap-title span { font-size: 11px; font-weight: normal; opacity: 0.7; cursor: pointer; }
+  .ap-info { background: rgba(255,255,255,0.1); border-radius: 8px; padding: 14px; color: white; font-size: 13px; line-height: 1.9; }
+  .ap-info b { color: #C6EFCE; }
+  .loading-box { text-align: center; padding: 40px; background: white; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .spinner { width: 36px; height: 36px; border: 4px solid #e0e0e0; border-top-color: #1F4E79; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-box p { font-size: 13px; color: #888; }
+  .badge { display: inline-block; padding: 3px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; }
+  .badge-pass { background: #C6EFCE; color: #276221; }
+  .badge-fail { background: #FFDCE1; color: #9C1D2A; }
+  .badge-pending { background: #FFF2CC; color: #7D5A00; }
+  .badge-nr { background: #E9E9E9; color: #555; }
+  .result-card { background: white; border-radius: 10px; padding: 22px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 16px; border-left: 5px solid #ccc; }
+  .result-card.pass-card { border-left-color: #276221; }
+  .result-card.fail-card { border-left-color: #9C1D2A; }
+  .result-card.pending-card { border-left-color: #7D5A00; }
+  .result-card.nr-card { border-left-color: #aaa; }
+  .card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+  .student-name { font-size: 18px; font-weight: bold; color: #1a1a1a; }
+  .cnic-display { font-size: 12px; color: #888; margin-top: 3px; }
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+  .lbl { font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px; }
+  .val { font-size: 14px; color: #222; font-weight: 500; }
+  .cert-box { border-radius: 8px; padding: 14px 16px; display: flex; align-items: center; gap: 12px; }
+  .cert-box.ready { background: #C6EFCE; }
+  .cert-box.processing { background: #FFF2CC; }
+  .cert-box.not-issued { background: #FFDCE1; }
+  .cert-box.not-recv { background: #F2F2F2; }
+  .cert-icon { font-size: 26px; }
+  .cert-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #555; margin-bottom: 3px; }
+  .cert-msg { font-size: 14px; font-weight: bold; }
+  .cert-msg.ready { color: #276221; }
+  .cert-msg.processing { color: #7D5A00; }
+  .cert-msg.not-issued { color: #9C1D2A; }
+  .cert-msg.not-recv { color: #555; }
+  .not-found { text-align: center; background: white; border-radius: 10px; padding: 40px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .not-found .icon { font-size: 42px; margin-bottom: 12px; }
+  .not-found h3 { color: #333; margin-bottom: 6px; }
+  .not-found p { font-size: 13px; color: #888; line-height: 1.6; }
+  .error-box { text-align: center; background: #fff5f5; border: 1.5px solid #FFDCE1; border-radius: 10px; padding: 30px; margin-bottom: 16px; }
+  .error-box p { font-size: 13px; color: #9C1D2A; }
+  footer { text-align: center; padding: 28px 16px; font-size: 12px; color: #999; }
+  @media (max-width: 480px) {
+    .info-grid { grid-template-columns: 1fr; }
+    .search-row { flex-direction: column; }
+    .card-top { flex-direction: column; gap: 8px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="site-header">
+  <div class="header-left">
+    <div class="logo-circle">IT</div>
+    <div class="org-info">
+      <h1>Training Institute &mdash; Certificate Status</h1>
+      <p>Enter your CNIC or Name to check your certificate status</p>
+    </div>
+  </div>
+  <span class="admin-link" onclick="showAdminLogin()" title="Admin">&#9881;</span>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h3>&#128274; Admin Login</h3>
+    <p>Enter admin password to continue.</p>
+    <div class="error-msg" id="errorMsg">&#10060; Wrong password. Try again.</div>
+    <input type="password" id="adminPass" placeholder="Enter password"
+      onkeydown="if(event.key==='Enter') checkPassword()" />
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="hideModal()">Cancel</button>
+      <button class="btn-login" onclick="checkPassword()">Login</button>
+    </div>
+  </div>
+</div>
+
+<div class="main-container">
+
+  <div class="stats-row">
+    <div class="stat-box"><div class="stat-num" id="statTotal">—</div><div class="stat-label">Total Students</div></div>
+    <div class="stat-box"><div class="stat-num" style="color:#276221" id="statPass">—</div><div class="stat-label">Passed</div></div>
+    <div class="stat-box"><div class="stat-num" style="color:#276221" id="statCert">—</div><div class="stat-label">Certs Ready</div></div>
+  </div>
+
+  <div class="admin-panel" id="adminPanel">
+    <div class="ap-title">
+      &#128196; Admin Panel
+      <span onclick="logoutAdmin()">&#10005; Logout</span>
+    </div>
+    <div class="ap-info">
+      Data update karne ke liye:<br>
+      <b>1.</b> supabase.com pe jao → Table Editor → students table<br>
+      <b>2.</b> Seedha wahan row edit / add / delete karo<br>
+      <b>3.</b> Website automatically live update ho jaayegi &#10003;
+    </div>
+  </div>
+
+  <div class="search-card">
+    <h2>&#128270; Check your certificate status</h2>
+    <p>Enter your <strong>CNIC number</strong> or <strong>Full Name</strong> to see your result and certificate status.</p>
+    <div class="search-row">
+      <input type="text" id="searchInput" placeholder="CNIC (e.g. 3740512345671) or Name" />
+      <button onclick="doSearch()">Check Status</button>
+    </div>
+  </div>
+
+  <div id="resultArea"></div>
+</div>
+
+<footer>
+  For queries contact: <strong>info@institute.edu.pk</strong> &nbsp;|&nbsp; 051-1234567
+  &nbsp;&nbsp;&copy; 2025 Training Institute
+</footer>
+
+<script>
+const SUPABASE_URL   = "https://oyvcaqihqoeycxbxeewl.supabase.co";
+const SUPABASE_KEY   = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im95dmNhcWlocW9leWN4YnhlZXdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwNjg0ODEsImV4cCI6MjA5NjY0NDQ4MX0.QLrXHnIgwdRJ-2v1k97seBAuQ1A-4joYVZRQ4yWca3M";
+const TABLE          = "students";
+const ADMIN_PASSWORD = "shayan@admin123";
+
+loadStats();
+
+async function sbFetch(query) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${TABLE}?${query}`, {
+    headers: {
+      "apikey": SUPABASE_KEY,
+      "Authorization": `Bearer ${SUPABASE_KEY}`
+    }
+  });
+  if (!res.ok) throw new Error("DB error " + res.status);
+  return res.json();
+}
+
+async function loadStats() {
+  try {
+    const data = await sbFetch("select=result,cert");
+    document.getElementById("statTotal").textContent = data.length;
+    document.getElementById("statPass").textContent  = data.filter(s => (s.result||"").toLowerCase() === "pass").length;
+    document.getElementById("statCert").textContent  = data.filter(s => (s.cert||"").toLowerCase()   === "ready").length;
+  } catch(e) {
+    ["statTotal","statPass","statCert"].forEach(id => document.getElementById(id).textContent = "—");
+  }
+}
+
+async function doSearch() {
+  const raw  = document.getElementById("searchInput").value.trim();
+  const area = document.getElementById("resultArea");
+  if (!raw) { area.innerHTML = ""; return; }
+
+  area.innerHTML = `<div class="loading-box"><div class="spinner"></div><p>Searching database...</p></div>`;
+
+  try {
+    let data = [];
+    const isNum = /^\d+$/.test(raw.replace(/[-\s]/g,""));
+
+    if (isNum) {
+      const clean = raw.replace(/[-\s]/g,"");
+      data = await sbFetch(`select=*&cnic=ilike.*${clean}*`);
+    }
+    if (data.length === 0) {
+      data = await sbFetch(`select=*&name=ilike.*${encodeURIComponent(raw)}*`);
+    }
+
+    if (data.length === 0) {
+      area.innerHTML = `<div class="not-found">
+        <div class="icon">&#128269;</div>
+        <h3>No record found</h3>
+        <p>No student found for "<strong>${raw}</strong>".<br>
+        Please check your CNIC or Name and try again.<br>
+        For help contact: 051-1234567</p>
+      </div>`;
+      return;
+    }
+    area.innerHTML = data.map(buildCard).join("");
+
+  } catch(e) {
+    area.innerHTML = `<div class="error-box"><p>&#10060; Could not connect to database. Please try again.<br><small>${e.message}</small></p></div>`;
+  }
+}
+
+function buildCard(s) {
+  const r = (s.result||"").toLowerCase();
+  const c = (s.cert||"").toLowerCase();
+  const cc = r==="pass"?"pass-card":r==="fail"?"fail-card":r==="pending"?"pending-card":"nr-card";
+  const bc = r==="pass"?"badge-pass":r==="fail"?"badge-fail":r==="pending"?"badge-pending":"badge-nr";
+  const ck = c==="ready"?"ready":c==="processing"?"processing":c==="not issued"?"not-issued":"not-recv";
+  const ci = c==="ready"?"&#127881;":c==="processing"?"&#9203;":c==="not issued"?"&#10060;":"&#8987;";
+  const cm = c==="ready"      ? "Certificate is ready — please visit admin office to collect" :
+             c==="processing" ? "Certificate is being prepared — check again in 2-3 days" :
+             c==="not issued" ? "Certificate not issued — re-attempt required" :
+                                "Status not updated yet — please contact admin";
+  const cnicRaw = (s.cnic||"").replace(/\D/g,"");
+  const cnicFmt = cnicRaw.replace(/(\d{5})(\d{7})(\d{1})/,"$1-$2-$3") || s.cnic || "—";
+  return `<div class="result-card ${cc}">
+    <div class="card-top">
+      <div><div class="student-name">${s.name||"—"}</div><div class="cnic-display">CNIC: ${cnicFmt}</div></div>
+      <span class="badge ${bc}">${s.result||"—"}</span>
+    </div>
+    <div class="info-grid">
+      <div class="info-item"><div class="lbl">Father's Name</div><div class="val">${s.father||"—"}</div></div>
+      <div class="info-item"><div class="lbl">Course</div><div class="val">${s.course||"—"}</div></div>
+    </div>
+    <div class="cert-box ${ck}">
+      <div class="cert-icon">${ci}</div>
+      <div><div class="cert-title">Certificate Status</div><div class="cert-msg ${ck}">${cm}</div></div>
+    </div>
+  </div>`;
+}
+
+function showAdminLogin() {
+  document.getElementById("overlay").classList.add("show");
+  document.getElementById("adminPass").value = "";
+  document.getElementById("errorMsg").style.display = "none";
+  setTimeout(()=>document.getElementById("adminPass").focus(),100);
+}
+function hideModal() { document.getElementById("overlay").classList.remove("show"); }
+function checkPassword() {
+  if (document.getElementById("adminPass").value === ADMIN_PASSWORD) {
+    hideModal();
+    document.getElementById("adminPanel").classList.add("show");
+  } else {
+    document.getElementById("errorMsg").style.display = "block";
+    document.getElementById("adminPass").value = "";
+    document.getElementById("adminPass").focus();
+  }
+}
+function logoutAdmin() { document.getElementById("adminPanel").classList.remove("show"); }
+
+document.getElementById("searchInput").addEventListener("keydown", e => { if(e.key==="Enter") doSearch(); });
+document.getElementById("overlay").addEventListener("click", function(e) { if(e.target===this) hideModal(); });
+</script>
+</body>
+</html>
