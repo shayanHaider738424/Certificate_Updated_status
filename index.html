@@ -37,7 +37,7 @@
   .modal-btns button { flex: 1; padding: 10px; border-radius: 7px; font-size: 14px; cursor: pointer; font-weight: bold; border: none; }
   .btn-login { background: #1F4E79; color: white; }
   .btn-cancel { background: #f0f0f0; color: #555; }
-  .error-msg { font-size: 12px; color: #9C1D2A; margin-bottom: 8px; display: none; }
+  .err-msg { font-size: 12px; color: #9C1D2A; margin-bottom: 8px; display: none; }
   .admin-panel { background: #1F4E79; border-radius: 10px; padding: 20px 24px; margin-bottom: 24px; display: none; }
   .admin-panel.show { display: block; }
   .ap-title { color: white; font-size: 14px; font-weight: bold; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
@@ -107,7 +107,7 @@
   <div class="modal">
     <h3>&#128274; Admin Login</h3>
     <p>Enter admin password to continue.</p>
-    <div class="error-msg" id="errorMsg">&#10060; Wrong password. Try again.</div>
+    <div class="err-msg" id="errorMsg">&#10060; Wrong password. Try again.</div>
     <input type="password" id="adminPass" placeholder="Enter password"
       onkeydown="if(event.key==='Enter') checkPassword()" />
     <div class="modal-btns">
@@ -132,7 +132,7 @@
     </div>
     <div class="ap-info">
       Data update karne ke liye:<br>
-      <b>1.</b> supabase.com pe jao → Table Editor → students table<br>
+      <b>1.</b> supabase.com pe jao &#8594; Table Editor &#8594; ST_Record table<br>
       <b>2.</b> Seedha wahan row edit / add / delete karo<br>
       <b>3.</b> Website automatically live update ho jaayegi &#10003;
     </div>
@@ -159,7 +159,15 @@
 const SUPABASE_URL   = "https://oyvcaqihqoeycxbxeewl.supabase.co";
 const SUPABASE_KEY   = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im95dmNhcWlocW9leWN4YnhlZXdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwNjg0ODEsImV4cCI6MjA5NjY0NDQ4MX0.QLrXHnIgwdRJ-2v1k97seBAuQ1A-4joYVZRQ4yWca3M";
 const TABLE          = "ST_Record";
-const ADMIN_PASSWORD = "shayan@admin123";
+const ADMIN_PASSWORD = "044066sha@12";
+
+// ── Column names exactly as in Supabase ──
+const COL_CNIC   = "CNIC";
+const COL_NAME   = "Student Name";
+const COL_FATHER = "Father Name";
+const COL_COURSE = "Course";
+const COL_RESULT = "Result";
+const COL_CERT   = "Certificate Status";
 
 loadStats();
 
@@ -170,17 +178,22 @@ async function sbFetch(query) {
       "Authorization": `Bearer ${SUPABASE_KEY}`
     }
   });
-  if (!res.ok) throw new Error("DB error " + res.status);
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`${res.status}: ${txt}`);
+  }
   return res.json();
 }
 
 async function loadStats() {
   try {
-    const data = await sbFetch("select=result,cert");
+    const cols = encodeURIComponent(`${COL_RESULT},${COL_CERT}`);
+    const data = await sbFetch(`select=${cols}`);
     document.getElementById("statTotal").textContent = data.length;
-    document.getElementById("statPass").textContent  = data.filter(s => (s.result||"").toLowerCase() === "pass").length;
-    document.getElementById("statCert").textContent  = data.filter(s => (s.cert||"").toLowerCase()   === "ready").length;
+    document.getElementById("statPass").textContent  = data.filter(s => (s[COL_RESULT]||"").toLowerCase() === "pass").length;
+    document.getElementById("statCert").textContent  = data.filter(s => (s[COL_CERT]||"").toLowerCase()   === "ready").length;
   } catch(e) {
+    console.error("Stats error:", e.message);
     ["statTotal","statPass","statCert"].forEach(id => document.getElementById(id).textContent = "—");
   }
 }
@@ -194,14 +207,14 @@ async function doSearch() {
 
   try {
     let data = [];
-    const isNum = /^\d+$/.test(raw.replace(/[-\s]/g,""));
+    const isNum = /^\d+$/.test(raw.replace(/[-\s]/g, ""));
 
     if (isNum) {
-      const clean = raw.replace(/[-\s]/g,"");
-      data = await sbFetch(`select=*&cnic=ilike.*${clean}*`);
+      const clean = raw.replace(/[-\s]/g, "");
+      data = await sbFetch(`select=*&${encodeURIComponent(COL_CNIC)}=ilike.*${clean}*`);
     }
     if (data.length === 0) {
-      data = await sbFetch(`select=*&name=ilike.*${encodeURIComponent(raw)}*`);
+      data = await sbFetch(`select=*&${encodeURIComponent(COL_NAME)}=ilike.*${encodeURIComponent(raw)}*`);
     }
 
     if (data.length === 0) {
@@ -217,13 +230,15 @@ async function doSearch() {
     area.innerHTML = data.map(buildCard).join("");
 
   } catch(e) {
-    area.innerHTML = `<div class="error-box"><p>&#10060; Could not connect to database. Please try again.<br><small>${e.message}</small></p></div>`;
+    console.error("Search error:", e.message);
+    area.innerHTML = `<div class="error-box"><p>&#10060; Could not connect. Please try again.<br><small>${e.message}</small></p></div>`;
   }
 }
 
 function buildCard(s) {
-  const r = (s.result||"").toLowerCase();
-  const c = (s.cert||"").toLowerCase();
+  const r = (s[COL_RESULT] || "").toLowerCase();
+  const c = (s[COL_CERT]   || "").toLowerCase();
+
   const cc = r==="pass"?"pass-card":r==="fail"?"fail-card":r==="pending"?"pending-card":"nr-card";
   const bc = r==="pass"?"badge-pass":r==="fail"?"badge-fail":r==="pending"?"badge-pending":"badge-nr";
   const ck = c==="ready"?"ready":c==="processing"?"processing":c==="not issued"?"not-issued":"not-recv";
@@ -232,20 +247,28 @@ function buildCard(s) {
              c==="processing" ? "Certificate is being prepared — check again in 2-3 days" :
              c==="not issued" ? "Certificate not issued — re-attempt required" :
                                 "Status not updated yet — please contact admin";
-  const cnicRaw = (s.cnic||"").replace(/\D/g,"");
-  const cnicFmt = cnicRaw.replace(/(\d{5})(\d{7})(\d{1})/,"$1-$2-$3") || s.cnic || "—";
+
+  const cnicRaw = (s[COL_CNIC] || "").toString().replace(/\D/g, "");
+  const cnicFmt = cnicRaw.replace(/(\d{5})(\d{7})(\d{1})/, "$1-$2-$3") || s[COL_CNIC] || "—";
+
   return `<div class="result-card ${cc}">
     <div class="card-top">
-      <div><div class="student-name">${s.name||"—"}</div><div class="cnic-display">CNIC: ${cnicFmt}</div></div>
-      <span class="badge ${bc}">${s.result||"—"}</span>
+      <div>
+        <div class="student-name">${s[COL_NAME] || "—"}</div>
+        <div class="cnic-display">CNIC: ${cnicFmt}</div>
+      </div>
+      <span class="badge ${bc}">${s[COL_RESULT] || "—"}</span>
     </div>
     <div class="info-grid">
-      <div class="info-item"><div class="lbl">Father's Name</div><div class="val">${s.father||"—"}</div></div>
-      <div class="info-item"><div class="lbl">Course</div><div class="val">${s.course||"—"}</div></div>
+      <div class="info-item"><div class="lbl">Father's Name</div><div class="val">${s[COL_FATHER] || "—"}</div></div>
+      <div class="info-item"><div class="lbl">Course</div><div class="val">${s[COL_COURSE] || "—"}</div></div>
     </div>
     <div class="cert-box ${ck}">
       <div class="cert-icon">${ci}</div>
-      <div><div class="cert-title">Certificate Status</div><div class="cert-msg ${ck}">${cm}</div></div>
+      <div>
+        <div class="cert-title">Certificate Status</div>
+        <div class="cert-msg ${ck}">${cm}</div>
+      </div>
     </div>
   </div>`;
 }
@@ -254,7 +277,7 @@ function showAdminLogin() {
   document.getElementById("overlay").classList.add("show");
   document.getElementById("adminPass").value = "";
   document.getElementById("errorMsg").style.display = "none";
-  setTimeout(()=>document.getElementById("adminPass").focus(),100);
+  setTimeout(() => document.getElementById("adminPass").focus(), 100);
 }
 function hideModal() { document.getElementById("overlay").classList.remove("show"); }
 function checkPassword() {
